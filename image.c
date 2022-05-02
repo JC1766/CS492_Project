@@ -39,7 +39,8 @@ struct image_dev {
 static int image_num_blocks(struct blkdev *dev)
 {
 	//CS492: your code here
-	return -1;
+	struct image_dev *im = dev->private;
+	return im->nblks;
 }
 
 
@@ -93,23 +94,49 @@ static int image_read(struct blkdev *dev, int first_blk, int nblks, void *buf)
 static int image_write(struct blkdev * dev, int first_blk, int nblks, void *buf)
 {
 	//CS492: your code here
-	return -1;
+	struct image_dev *im = dev->private;
+	/* Check whether the disk is unavailable */
+	if (im->fd == -1) {
+		return E_UNAVAIL;
+	}
+	assert((first_blk >= 0 && first_blk+nblks <= im->nblks);
+	if(first_blk == 0){
+		// printf("Warning: writing to superblock");
+		fprintf(stderr, "Warning: writing to superblock\n");
+	}
+	int result = pwrite(im->fd, buf, nblks*BLOCK_SIZE, first_blk*BLOCK_SIZE); 
+	/* Since we already checked the address, this shouldn't
+	 * happen very often.
+	 */
+	if (result < 0) {
+		fprintf(stderr, "write error on %s: %s\n", im->path, strerror(errno));
+		assert(0);
+	}
+	if (result != nblks*BLOCK_SIZE) {
+		fprintf(stderr, "short write on %s: %s\n", im->path, strerror(errno));
+		assert(0);
+	}
+	return SUCCESS;
 }
 
 /**
  * Flush the block device.
  * @param dev: the block device
- * @aparam first_blk: index of the block to start flushing 
+ * @param first_blk: index of the block to start flushing 
  * @param nblks: number of blocks to flush
  * @return SUCCESS if successful, E_UNAVAIL if device unavailable
  *
  * Note: this function does not actually flush anything, it just returns
- * one or the other of the twp possible return values.
+ * one or the other of the two possible return values.
 */
 static int image_flush(struct blkdev * dev, int first_blk, int nblks)
 {
 	//CS492: your code here
-	return -1;
+	struct image_dev *im = dev->private;
+	if (im->fd == -1) {
+		return E_UNAVAIL;
+	}
+	return SUCCESS;
 }
 
 /**
@@ -122,6 +149,12 @@ static int image_flush(struct blkdev * dev, int first_blk, int nblks)
 static void image_close(struct blkdev *dev)
 {
 	//CS492: your code here
+	struct image_dev *im = dev->private;
+	if (im->fd != -1) {
+		close(im->fd);
+	}
+	free(im);
+	free(dev);
 }
 
 /** Operations on this block device */

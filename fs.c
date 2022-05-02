@@ -1000,7 +1000,13 @@ static int fs_chmod(const char *path, mode_t mode)
 int fs_utime(const char *path, struct utimbuf *ut)
 {
 	//CS492: your code here
-	return -1;
+	char* _path = strdup(path);
+	int inode_idx = translate(_path);
+	if (inode_idx < 0) return inode_idx;
+	struct fs_inode *inode = &inodes[inode_idx];
+	inode->mtime = ut->modtime;
+	update_inode(inode_idx);
+	return SUCCESS;
 }
 
 /**

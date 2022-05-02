@@ -99,7 +99,7 @@ static int image_write(struct blkdev * dev, int first_blk, int nblks, void *buf)
 	if (im->fd == -1) {
 		return E_UNAVAIL;
 	}
-	assert((first_blk >= 0 && first_blk+nblks <= im->nblks);
+	assert(first_blk >= 0 && first_blk+nblks <= im->nblks);
 	if(first_blk == 0){
 		// printf("Warning: writing to superblock");
 		fprintf(stderr, "Warning: writing to superblock\n");

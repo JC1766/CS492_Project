@@ -39,8 +39,8 @@ struct image_dev {
 static int image_num_blocks(struct blkdev *dev)
 {
 	//CS492: your code here
-	struct image_dev *im = dev->private;
-	return im->nblks;
+	struct image_dev *im = dev->private; // get the image of the block device
+	return im->nblks; // return the number of blocks inside the image block device
 }
 
 
@@ -94,25 +94,25 @@ static int image_read(struct blkdev *dev, int first_blk, int nblks, void *buf)
 static int image_write(struct blkdev * dev, int first_blk, int nblks, void *buf)
 {
 	//CS492: your code here
-	struct image_dev *im = dev->private;
+	struct image_dev *im = dev->private; // get the image of the block device
 	/* Check whether the disk is unavailable */
-	if (im->fd == -1) {
+	if (im->fd == -1) { // error if the block device is unavailable
 		return E_UNAVAIL;
 	}
-	assert(first_blk >= 0 && first_blk+nblks <= im->nblks);
-	if(first_blk == 0){
+	assert(first_blk >= 0 && first_blk+nblks <= im->nblks); // make sure that the first block index is within the number of blocks to write
+	if(first_blk == 0){ // check if the first block index is the superblock (block 0)
 		// printf("Warning: writing to superblock");
 		fprintf(stderr, "Warning: writing to superblock\n");
 	}
-	int result = pwrite(im->fd, buf, nblks*BLOCK_SIZE, first_blk*BLOCK_SIZE); 
+	int result = pwrite(im->fd, buf, nblks*BLOCK_SIZE, first_blk*BLOCK_SIZE); // write to the block device using the buffer and record the number of bytes written 
 	/* Since we already checked the address, this shouldn't
 	 * happen very often.
 	 */
-	if (result < 0) {
+	if (result < 0) { // error if no bytes were written to the block device
 		fprintf(stderr, "write error on %s: %s\n", im->path, strerror(errno));
 		assert(0);
 	}
-	if (result != nblks*BLOCK_SIZE) {
+	if (result != nblks*BLOCK_SIZE) { // error if the number of bytes written to the block device is less than the expected total number of bytes
 		fprintf(stderr, "short write on %s: %s\n", im->path, strerror(errno));
 		assert(0);
 	}
@@ -132,11 +132,11 @@ static int image_write(struct blkdev * dev, int first_blk, int nblks, void *buf)
 static int image_flush(struct blkdev * dev, int first_blk, int nblks)
 {
 	//CS492: your code here
-	struct image_dev *im = dev->private;
-	if (im->fd == -1) {
+	struct image_dev *im = dev->private; // get the image of the block device
+	if (im->fd == -1) { // error if the block device is unavailable
 		return E_UNAVAIL;
 	}
-	return SUCCESS;
+	return SUCCESS; // since we are not flushing anything per the function's specs, return success
 }
 
 /**
@@ -149,12 +149,12 @@ static int image_flush(struct blkdev * dev, int first_blk, int nblks)
 static void image_close(struct blkdev *dev)
 {
 	//CS492: your code here
-	struct image_dev *im = dev->private;
-	if (im->fd != -1) {
+	struct image_dev *im = dev->private; // get the image of the block device
+	if (im->fd != -1) { // if the block device is available, close it
 		close(im->fd);
 	}
-	free(im);
-	free(dev);
+	free(im); // free the memory of the image block device
+	free(dev); // free the memory of the block device itself
 }
 
 /** Operations on this block device */

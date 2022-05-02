@@ -418,8 +418,8 @@ void* fs_init(struct fuse_conn_info *conn)
 	// read the superblock
 	//CS492: your code below
 	struct fs_super sb;
-
-
+	disk->ops->read(disk,0,1,&sb);
+	// disk->ops->write(disk, inode_map_base, block_map_base - inode_map_base, inode_map)
 
 	root_inode = 42;
 
@@ -427,23 +427,24 @@ void* fs_init(struct fuse_conn_info *conn)
 	// read inode map
 	//CS492: your code below
 	inode_map_base = 1; // This is correct.
-	inode_map = NULL;
-
+	inode_map = malloc(sb.inode_map_sz * BLOCK_SIZE);
+	disk->ops->read(disk,inode_map_base,sb.inode_map_sz,inode_map);
 
 
 	// read block map
 	//CS492: your code below
-	block_map_base = 42;
-	block_map = NULL;
+	block_map_base = inode_map_base + sb.inode_map_sz;
+	block_map = malloc(sb.block_map_sz * BLOCK_SIZE);
+	disk->ops->read(disk,block_map_base,sb.block_map_sz,block_map);
 
 
 
 	/* The inode data is in the next set of blocks */
 	//CS492: your code below
-	inode_base = 42;
-	n_inodes = 42;
-	inodes = NULL;
-
+	inode_base = block_map_base + sb.block_map_sz;
+	n_inodes = sb.inode_region_sz;
+	inodes = malloc(sb.inode_region_sz * BLOCK_SIZE);
+	disk->ops->read(disk,inode_base,sb.inode_region_sz,inodes);
 
 
 	// number of blocks on device

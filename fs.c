@@ -1158,7 +1158,7 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 	if (offset >= inode->size) return 0; // if offset >= file len, return 0
 
 	// adjust len to not exceed past the EOF
-	size_t len = (offset + len) > inode->size ? (inode->size - offset) : len;
+	len = (offset + len) > inode->size ? (inode->size - offset) : len;
 	// len needed to read;
 	size_t len_to_read = len;
 

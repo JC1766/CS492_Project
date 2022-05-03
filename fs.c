@@ -1007,12 +1007,12 @@ static int fs_chmod(const char *path, mode_t mode)
 int fs_utime(const char *path, struct utimbuf *ut)
 {
 	//CS492: your code here
-	char* _path = strdup(path);
-	int inode_idx = translate(_path);
-	if (inode_idx < 0) return inode_idx;
-	struct fs_inode *inode = &inodes[inode_idx];
-	inode->mtime = ut->modtime;
-	update_inode(inode_idx);
+	char* _path = strdup(path); // create a copy of the path so we can modify it
+	int inode_idx = translate(_path); // get the inode number of the file
+	if (inode_idx < 0) return inode_idx; // exit if the inode number cannot be found
+	struct fs_inode *inode = &inodes[inode_idx]; // get the file's inode from the inode table using its inode number
+	inode->mtime = ut->modtime; // update the inode's modification time
+	update_inode(inode_idx); // save changes to the inode
 	return SUCCESS;
 }
 

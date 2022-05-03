@@ -418,7 +418,7 @@ void* fs_init(struct fuse_conn_info *conn)
 	// read the superblock
 	//CS492: your code below
 	struct fs_super sb;
-	// read into the superblock from the block device starting at block index 0; error if the block read fails
+	// read into the superblock from the block device starting at block index 0; exit if the block read fails
 	if (disk->ops->read(disk,0,1,&sb) < 0) exit(1);
 
 	root_inode = 42;
@@ -428,7 +428,7 @@ void* fs_init(struct fuse_conn_info *conn)
 	//CS492: your code below
 	inode_map_base = 1; // This is correct. The inode map starts at block index 1
 	inode_map = malloc(sb.inode_map_sz * BLOCK_SIZE); // allocate memory for the inode map pointer
-	// read into the inode map from the block device starting at the inode map base; error if the block read fails
+	// read into the inode map from the block device starting at the inode map base; exit if the block read fails
 	if (disk->ops->read(disk,inode_map_base,sb.inode_map_sz,inode_map) < 0) exit(1);
 
 
@@ -436,7 +436,7 @@ void* fs_init(struct fuse_conn_info *conn)
 	//CS492: your code below
 	block_map_base = inode_map_base + sb.inode_map_sz; // the block map index starts right after the inode map index
 	block_map = malloc(sb.block_map_sz * BLOCK_SIZE); // allocate mememory for the block map pointer
-	// read into the block map from the block device starting at the block map base; error if the block read fails
+	// read into the block map from the block device starting at the block map base; exit if the block read fails
 	if (disk->ops->read(disk,block_map_base,sb.block_map_sz,block_map) < 0) exit(1);
 
 
@@ -446,7 +446,7 @@ void* fs_init(struct fuse_conn_info *conn)
 	inode_base = block_map_base + sb.block_map_sz; // the inode table index starts right after the block map index
 	n_inodes = sb.inode_region_sz; // update the number of inodes from the superblock
 	inodes = malloc(sb.inode_region_sz * BLOCK_SIZE); // allocate memory for the inode table pointer
-	// read into the inode table from the block device starting at the inode table base; error if the block read fails
+	// read into the inode table from the block device starting at the inode table base; exit if the block read fails
 	if (disk->ops->read(disk,inode_base,sb.inode_region_sz,inodes) < 0) exit(1);
 
 
@@ -681,26 +681,28 @@ static int fs_mkdir(const char *path, mode_t mode)
 	//CS492: your code here
 	//get current and parent inodes
 	mode |= S_IFDIR;
+	// if the mode is not a directory or if we are in the root directory, error
 	if (!S_ISDIR(mode) || strcmp(path, "/") == 0) return -EINVAL;
-	char *_path = strdup(path);
-	char name[FS_FILENAME_SIZE];
-	int inode_idx = translate(_path);
-	int parent_inode_idx = translate_1(_path, name);
-	if (inode_idx >= 0) return -EEXIST;
-	if (parent_inode_idx < 0) return parent_inode_idx;
+	char *_path = strdup(path); // create a copy of the path so we can modify it
+	char name[FS_FILENAME_SIZE]; // initialize a char array to hold the directory name
+	int inode_idx = translate(_path); // get the inode number of the current path
+	int parent_inode_idx = translate_1(_path, name); // get the inode number of the parent for the new directory
+	if (inode_idx >= 0) return -EEXIST; // if the directory already exists, error
+	if (parent_inode_idx < 0) return parent_inode_idx; // exit if the parent inode number cannot be found
 	//read parent info
-	struct fs_inode *parent_inode = &inodes[parent_inode_idx];
-	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR;
+	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent inode from the inode table using its inode number
+	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent's mode is not a directory, error
 
-	struct fs_dirent entries[DIRENTS_PER_BLK];
-	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent));
+	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
+	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
+	// read into the directory entry table from the block device; exit if the block read fails
 	if (disk->ops->read(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 	//assign inode and directory and update
 	int res = set_attributes_and_update(entries, name, mode, true);
-	if (res < 0) return res;
+	if (res < 0) return res; // exit if assigning the directory's inode fails
 
-	//write entries buffer into disk
+	//write entries buffer into disk; exit if the block write fails
 	if (disk->ops->write(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 

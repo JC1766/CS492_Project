@@ -418,32 +418,35 @@ void* fs_init(struct fuse_conn_info *conn)
 	// read the superblock
 	//CS492: your code below
 	struct fs_super sb;
+	// read into the superblock from the block device starting at block index 0; exit if the block read fails
 	if (disk->ops->read(disk,0,1,&sb) < 0) exit(1);
-	// disk->ops->write(disk, inode_map_base, block_map_base - inode_map_base, inode_map)
 
 	root_inode = 42;
 
 	/* The inode map and block map are directly after the superblock */
 	// read inode map
 	//CS492: your code below
-	inode_map_base = 1; // This is correct.
-	inode_map = malloc(sb.inode_map_sz * BLOCK_SIZE);
+	inode_map_base = 1; // This is correct. The inode map starts at block index 1
+	inode_map = malloc(sb.inode_map_sz * BLOCK_SIZE); // allocate memory for the inode map pointer
+	// read into the inode map from the block device starting at the inode map base; exit if the block read fails
 	if (disk->ops->read(disk,inode_map_base,sb.inode_map_sz,inode_map) < 0) exit(1);
 
 
 	// read block map
 	//CS492: your code below
-	block_map_base = inode_map_base + sb.inode_map_sz;
-	block_map = malloc(sb.block_map_sz * BLOCK_SIZE);
+	block_map_base = inode_map_base + sb.inode_map_sz; // the block map index starts right after the inode map index
+	block_map = malloc(sb.block_map_sz * BLOCK_SIZE); // allocate mememory for the block map pointer
+	// read into the block map from the block device starting at the block map base; exit if the block read fails
 	if (disk->ops->read(disk,block_map_base,sb.block_map_sz,block_map) < 0) exit(1);
 
 
 
 	/* The inode data is in the next set of blocks */
 	//CS492: your code below
-	inode_base = block_map_base + sb.block_map_sz;
-	n_inodes = sb.inode_region_sz;
-	inodes = malloc(sb.inode_region_sz * BLOCK_SIZE);
+	inode_base = block_map_base + sb.block_map_sz; // the inode table index starts right after the block map index
+	n_inodes = sb.inode_region_sz; // update the number of inodes from the superblock
+	inodes = malloc(sb.inode_region_sz * BLOCK_SIZE); // allocate memory for the inode table pointer
+	// read into the inode table from the block device starting at the inode table base; exit if the block read fails
 	if (disk->ops->read(disk,inode_base,sb.inode_region_sz,inodes) < 0) exit(1);
 
 
@@ -678,26 +681,28 @@ static int fs_mkdir(const char *path, mode_t mode)
 	//CS492: your code here
 	//get current and parent inodes
 	mode |= S_IFDIR;
+	// if the mode is not a directory or if we are in the root directory, error
 	if (!S_ISDIR(mode) || strcmp(path, "/") == 0) return -EINVAL;
-	char *_path = strdup(path);
-	char name[FS_FILENAME_SIZE];
-	int inode_idx = translate(_path);
-	int parent_inode_idx = translate_1(_path, name);
-	if (inode_idx >= 0) return -EEXIST;
-	if (parent_inode_idx < 0) return parent_inode_idx;
+	char *_path = strdup(path); // create a copy of the path so we can modify it
+	char name[FS_FILENAME_SIZE]; // initialize a char array to hold the directory name
+	int inode_idx = translate(_path); // get the inode number of the directory
+	int parent_inode_idx = translate_1(_path, name); // get the inode number of the directory's parent
+	if (inode_idx >= 0) return -EEXIST; // if the directory already exists, error
+	if (parent_inode_idx < 0) return parent_inode_idx; // exit if the parent directory's inode number cannot be found
 	//read parent info
-	struct fs_inode *parent_inode = &inodes[parent_inode_idx];
-	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR;
+	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent directory's inode from the inode table using its inode number
+	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent directory's mode is not a directory, error
 
-	struct fs_dirent entries[DIRENTS_PER_BLK];
-	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent));
+	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
+	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
+	// read into the directory entry table from the block device; exit if the block read fails
 	if (disk->ops->read(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 	//assign inode and directory and update
 	int res = set_attributes_and_update(entries, name, mode, true);
-	if (res < 0) return res;
+	if (res < 0) return res; // exit if assigning the directory's inode fails
 
-	//write entries buffer into disk
+	//write entries buffer into disk; exit if the block write fails
 	if (disk->ops->write(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 
@@ -857,23 +862,24 @@ static int fs_rmdir(const char *path)
 
 	//get inodes and check
 	//CS492: your code below
-	char *_path = strdup(path);
-	char name[FS_FILENAME_SIZE];
-	int inode_idx = translate(_path);
-	int parent_inode_idx = translate_1(_path, name);
-	struct fs_inode *inode = &inodes[inode_idx];
-	struct fs_inode *parent_inode = &inodes[parent_inode_idx];
+	char *_path = strdup(path); // create a copy of the path so we can modify it
+	char name[FS_FILENAME_SIZE]; // initialize a char array to hold the directory name
+	int inode_idx = translate(_path); // get the inode number of the directory
+	int parent_inode_idx = translate_1(_path, name); // get the inode number of the directory's parent
+	struct fs_inode *inode = &inodes[inode_idx]; // get the directory's inode from the inode table using its inode number
+	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent directory's inode from the inode table using its inode number
 
-	if (inode_idx < 0 || parent_inode_idx < 0) return -ENOENT;
-	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR;
-	if (!S_ISDIR(inode->mode)) return -ENOTDIR;
+	if (inode_idx < 0 || parent_inode_idx < 0) return -ENOENT; // if the directory's or parent directory's inode cannot be found, error
+	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent directory's mode is not a directory, error
+	if (!S_ISDIR(inode->mode)) return -ENOTDIR; // if the directory's mode is not a directory, error
 
-	//check if dir if empty
-	struct fs_dirent entries[DIRENTS_PER_BLK];
-	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent));
+	//check if dir is empty
+	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
+	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
+	// read into the directory entry table from the block device; exit if the block read fails
 	if (disk->ops->read(disk, inode->direct[0], 1, entries) < 0)
 		exit(1);
-	int res = is_empty_dir(entries);
+	int res = is_empty_dir(entries); // if the directory is not empty, error
 	if (res == 0) return -ENOTEMPTY;
 
 	//remove entry from parent dir
@@ -883,6 +889,7 @@ static int fs_rmdir(const char *path)
 			memset(&entries[i], 0, sizeof(struct fs_dirent));
 		}
 	}
+	// update the parent's entry table in the block device; exit if the block write fails
 	if (disk->ops->write(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 
@@ -1000,12 +1007,12 @@ static int fs_chmod(const char *path, mode_t mode)
 int fs_utime(const char *path, struct utimbuf *ut)
 {
 	//CS492: your code here
-	char* _path = strdup(path);
-	int inode_idx = translate(_path);
-	if (inode_idx < 0) return inode_idx;
-	struct fs_inode *inode = &inodes[inode_idx];
-	inode->mtime = ut->modtime;
-	update_inode(inode_idx);
+	char* _path = strdup(path); // create a copy of the path so we can modify it
+	int inode_idx = translate(_path); // get the inode number of the file
+	if (inode_idx < 0) return inode_idx; // exit if the inode number cannot be found
+	struct fs_inode *inode = &inodes[inode_idx]; // get the file's inode from the inode table using its inode number
+	inode->mtime = ut->modtime; // update the inode's modification time
+	update_inode(inode_idx); // save changes to the inode
 	return SUCCESS;
 }
 
@@ -1143,40 +1150,44 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 		    struct fuse_file_info *fi)
 {
 	//CS492: your code here
-	char *_path = strdup(path);
-	int inode_idx = translate(_path);
-	if (inode_idx < 0) return inode_idx;
-	struct fs_inode *inode = &inodes[inode_idx];
-	if (S_ISDIR(inode->mode)) return -EISDIR;
-	if (offset > inode->size) return 0;
+	char *_path = strdup(path); // create a copy of the path so we can modify it
+	int inode_idx = translate(_path); // get the inode number of the file
+	if (inode_idx < 0) return inode_idx; // exit if the inode number cannot be found
+	struct fs_inode *inode = &inodes[inode_idx]; // get the file's inode from the inode table using its inode number
+	if (S_ISDIR(inode->mode)) return -EISDIR; // if the file's mode is a directory, error
+	if (offset >= inode->size) return 0; // if offset >= file len, return 0
 
-	//len need to read
+	// adjust len to not exceed past the EOF
+	size_t len = (offset + len) > inode->size ? (inode->size - offset) : len;
+	// len needed to read;
 	size_t len_to_read = len;
-	if ((offset + len) > inode->size){
-		len_to_read = inode->size - offset;
-	}
 
-	//read direct blocks
+	// read the direct block
 	if (len_to_read > 0 && offset < DIR_SIZE) {
-		//len finished read
+		// read 'len_to_read' bytes from the direct block of the inode
 		size_t temp = fs_read_dir(inode_idx, buf, len_to_read, (size_t) offset);
-		len_to_read -= temp;
-		offset += temp;
-		buf += temp;
+		len_to_read -= temp; // decrement the len to read after reading the direct block
+		offset += temp; // advance the file offset after reading the direct block
+		buf += temp; // advance the buffer offset after reading the direct block
 	}
 
-	//write indirect 1 blocks
+	// read the single indirect block
 	if (len_to_read > 0 && offset < DIR_SIZE + INDIR1_SIZE) {
-		//need to allocate indir_1
-		if (!inode->indir_1) {
-
-		}
-		size_t temp = fs_write_indir1(inode->indir_1, buf, len_to_write, (size_t) offset - DIR_SIZE);
-		len_to_write -= temp;
-		offset += temp;
-		buf += temp;
+		// read 'len_to_read' bytes from the single indirect block of the inode
+		size_t temp =  fs_read_indir1(inode->indir_1, buf, len_to_read, (size_t) offset - DIR_SIZE);
+		len_to_read -= temp; // decrement the len to read after reading the single indirect block
+		offset += temp; // advance the file offset after reading the single indirect block
+		buf += temp; // advance the buffer offset after reading the single indirect block
 	}
-	return -1;
+
+	// read the double indirect block
+	if (len_to_read > 0 && offset < DIR_SIZE + INDIR1_SIZE + INDIR2_SIZE) {
+		// read 'len_to_read' bytes from the double indirect block of the inode
+		size_t temp = fs_read_indir2(inode->indir_2, buf, len_to_read, (size_t) offset - DIR_SIZE - INDIR1_SIZE);
+		len_to_read -= temp; // decrement the len to read after reading the double indirect block
+	}
+
+	return (int) (len - len_to_read); // return the number of bytes read
 }
 
 static void fs_write_blk(int blk_num, const char *buf, size_t len, size_t offset) {

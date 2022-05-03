@@ -1150,7 +1150,42 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 		    struct fuse_file_info *fi)
 {
 	//CS492: your code here
-	return -1;
+	char *_path = strdup(path); // create a copy of the path so we can modify it
+	int inode_idx = translate(_path); // get the inode number of the file
+	if (inode_idx < 0) return inode_idx; // exit if the inode number cannot be found
+	struct fs_inode *inode = &inodes[inode_idx]; // get the file's inode from the inode table using its inode number
+	if (S_ISDIR(inode->mode)) return -EISDIR; // if the file's mode is a directory, error
+	if (offset >= inode->size) return 0; // if offset >= file len, return 0
+
+	// len need to read; adjust len to not exceed past the EOF
+	size_t len_to_read = (offset + len) > inode->size ? (inode->size - offset) : len;
+
+	// read the direct block
+	if (len_to_read > 0 && offset < DIR_SIZE) {
+		// read 'len_to_read' bytes from the direct block of the inode
+		size_t temp = fs_read_dir(inode_idx, buf, len_to_read, (size_t) offset);
+		len_to_read -= temp; // decrement the len to read after reading the direct block
+		offset += temp; // advance the file offset after reading the direct block
+		buf += temp; // advance the buffer offset after reading the direct block
+	}
+
+	// read the single indirect block
+	if (len_to_read > 0 && offset < DIR_SIZE + INDIR1_SIZE) {
+		// read 'len_to_read' bytes from the single indirect block of the inode
+		size_t temp =  fs_read_indir1(inode->indir_1, buf, len_to_read, (size_t) offset - DIR_SIZE);
+		len_to_read -= temp; // decrement the len to read after reading the single indirect block
+		offset += temp; // advance the file offset after reading the single indirect block
+		buf += temp; // advance the buffer offset after reading the single indirect block
+	}
+
+	// read the double indirect block
+	if (len_to_read > 0 && offset < DIR_SIZE + INDIR1_SIZE + INDIR2_SIZE) {
+		// read 'len_to_read' bytes from the double indirect block of the inode
+		size_t temp = fs_read_indir2(inode->indir_2, buf, len_to_read, (size_t) offset - DIR_SIZE - INDIR1_SIZE);
+		len_to_read -= temp; // decrement the len to read after reading the double indirect block
+	}
+
+	return (int) (len - len_to_read); // return the number of bytes read
 }
 
 static void fs_write_blk(int blk_num, const char *buf, size_t len, size_t offset) {

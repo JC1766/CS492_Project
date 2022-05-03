@@ -421,7 +421,7 @@ void* fs_init(struct fuse_conn_info *conn)
 	// read into the superblock from the block device starting at block index 0; exit if the block read fails
 	if (disk->ops->read(disk,0,1,&sb) < 0) exit(1);
 
-	root_inode = 42;
+	root_inode = sb.root_inode; // update the root inode from the superblock
 
 	/* The inode map and block map are directly after the superblock */
 	// read inode map

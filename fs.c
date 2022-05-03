@@ -1157,8 +1157,10 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 	if (S_ISDIR(inode->mode)) return -EISDIR; // if the file's mode is a directory, error
 	if (offset >= inode->size) return 0; // if offset >= file len, return 0
 
-	// len need to read; adjust len to not exceed past the EOF
-	size_t len_to_read = (offset + len) > inode->size ? (inode->size - offset) : len;
+	// adjust len to not exceed past the EOF
+	size_t len = (offset + len) > inode->size ? (inode->size - offset) : len;
+	// len needed to read;
+	size_t len_to_read = len;
 
 	// read the direct block
 	if (len_to_read > 0 && offset < DIR_SIZE) {

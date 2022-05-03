@@ -685,13 +685,13 @@ static int fs_mkdir(const char *path, mode_t mode)
 	if (!S_ISDIR(mode) || strcmp(path, "/") == 0) return -EINVAL;
 	char *_path = strdup(path); // create a copy of the path so we can modify it
 	char name[FS_FILENAME_SIZE]; // initialize a char array to hold the directory name
-	int inode_idx = translate(_path); // get the inode number of the current path
-	int parent_inode_idx = translate_1(_path, name); // get the inode number of the parent for the new directory
+	int inode_idx = translate(_path); // get the inode number of the directory
+	int parent_inode_idx = translate_1(_path, name); // get the inode number of the directory's parent
 	if (inode_idx >= 0) return -EEXIST; // if the directory already exists, error
-	if (parent_inode_idx < 0) return parent_inode_idx; // exit if the parent inode number cannot be found
+	if (parent_inode_idx < 0) return parent_inode_idx; // exit if the parent directory's inode number cannot be found
 	//read parent info
-	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent inode from the inode table using its inode number
-	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent's mode is not a directory, error
+	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent directory's inode from the inode table using its inode number
+	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent directory's mode is not a directory, error
 
 	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
 	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
@@ -862,23 +862,24 @@ static int fs_rmdir(const char *path)
 
 	//get inodes and check
 	//CS492: your code below
-	char *_path = strdup(path);
-	char name[FS_FILENAME_SIZE];
-	int inode_idx = translate(_path);
-	int parent_inode_idx = translate_1(_path, name);
-	struct fs_inode *inode = &inodes[inode_idx];
-	struct fs_inode *parent_inode = &inodes[parent_inode_idx];
+	char *_path = strdup(path); // create a copy of the path so we can modify it
+	char name[FS_FILENAME_SIZE]; // initialize a char array to hold the directory name
+	int inode_idx = translate(_path); // get the inode number of the directory
+	int parent_inode_idx = translate_1(_path, name); // get the inode number of the directory's parent
+	struct fs_inode *inode = &inodes[inode_idx]; // get the directory's inode from the inode table using its inode number
+	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent directory's inode from the inode table using its inode number
 
-	if (inode_idx < 0 || parent_inode_idx < 0) return -ENOENT;
-	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR;
-	if (!S_ISDIR(inode->mode)) return -ENOTDIR;
+	if (inode_idx < 0 || parent_inode_idx < 0) return -ENOENT; // if the directory's or parent directory's inode cannot be found, error
+	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent directory's mode is not a directory, error
+	if (!S_ISDIR(inode->mode)) return -ENOTDIR; // if the directory's mode is not a directory, error
 
-	//check if dir if empty
-	struct fs_dirent entries[DIRENTS_PER_BLK];
-	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent));
+	//check if dir is empty
+	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
+	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
+	// read into the directory entry table from the block device; exit if the block read fails
 	if (disk->ops->read(disk, inode->direct[0], 1, entries) < 0)
 		exit(1);
-	int res = is_empty_dir(entries);
+	int res = is_empty_dir(entries); // if the directory is not empty, error
 	if (res == 0) return -ENOTEMPTY;
 
 	//remove entry from parent dir
@@ -888,6 +889,7 @@ static int fs_rmdir(const char *path)
 			memset(&entries[i], 0, sizeof(struct fs_dirent));
 		}
 	}
+	// update the parent's entry table in the block device; exit if the block write fails
 	if (disk->ops->write(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 

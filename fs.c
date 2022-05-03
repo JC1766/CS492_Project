@@ -418,32 +418,35 @@ void* fs_init(struct fuse_conn_info *conn)
 	// read the superblock
 	//CS492: your code below
 	struct fs_super sb;
+	// read into the superblock from the block device starting at block index 0; error if the block read fails
 	if (disk->ops->read(disk,0,1,&sb) < 0) exit(1);
-	// disk->ops->write(disk, inode_map_base, block_map_base - inode_map_base, inode_map)
 
 	root_inode = 42;
 
 	/* The inode map and block map are directly after the superblock */
 	// read inode map
 	//CS492: your code below
-	inode_map_base = 1; // This is correct.
-	inode_map = malloc(sb.inode_map_sz * BLOCK_SIZE);
+	inode_map_base = 1; // This is correct. The inode map starts at block index 1
+	inode_map = malloc(sb.inode_map_sz * BLOCK_SIZE); // allocate memory for the inode map pointer
+	// read into the inode map from the block device starting at the inode map base; error if the block read fails
 	if (disk->ops->read(disk,inode_map_base,sb.inode_map_sz,inode_map) < 0) exit(1);
 
 
 	// read block map
 	//CS492: your code below
-	block_map_base = inode_map_base + sb.inode_map_sz;
-	block_map = malloc(sb.block_map_sz * BLOCK_SIZE);
+	block_map_base = inode_map_base + sb.inode_map_sz; // the block map index starts right after the inode map index
+	block_map = malloc(sb.block_map_sz * BLOCK_SIZE); // allocate mememory for the block map pointer
+	// read into the block map from the block device starting at the block map base; error if the block read fails
 	if (disk->ops->read(disk,block_map_base,sb.block_map_sz,block_map) < 0) exit(1);
 
 
 
 	/* The inode data is in the next set of blocks */
 	//CS492: your code below
-	inode_base = block_map_base + sb.block_map_sz;
-	n_inodes = sb.inode_region_sz;
-	inodes = malloc(sb.inode_region_sz * BLOCK_SIZE);
+	inode_base = block_map_base + sb.block_map_sz; // the inode table index starts right after the block map index
+	n_inodes = sb.inode_region_sz; // update the number of inodes from the superblock
+	inodes = malloc(sb.inode_region_sz * BLOCK_SIZE); // allocate memory for the inode table pointer
+	// read into the inode table from the block device starting at the inode table base; error if the block read fails
 	if (disk->ops->read(disk,inode_base,sb.inode_region_sz,inodes) < 0) exit(1);
 
 

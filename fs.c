@@ -1031,6 +1031,13 @@ static int fs_open(const char *path, struct fuse_file_info *fi)
 
 static void fs_read_blk(int blk_num, char *buf, size_t len, size_t offset) {
 	//CS492: your code here
+	//init entries list to 0's
+	char entries[BLOCK_SIZE];
+	memset(entries, 0, BLOCK_SIZE);
+	//read block content into entries 
+	if (disk->ops->read(disk, blk_num, 1, entries) < 0) exit(1);
+	//copy len length entries content starting from offset into buf
+	memcpy(buf, entries + offset, len);
 }
 
 static size_t fs_read_dir(size_t inode_idx, char *buf, size_t len, size_t offset) {

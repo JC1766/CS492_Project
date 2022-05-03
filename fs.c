@@ -1143,6 +1143,39 @@ static int fs_read(const char *path, char *buf, size_t len, off_t offset,
 		    struct fuse_file_info *fi)
 {
 	//CS492: your code here
+	char *_path = strdup(path);
+	int inode_idx = translate(_path);
+	if (inode_idx < 0) return inode_idx;
+	struct fs_inode *inode = &inodes[inode_idx];
+	if (S_ISDIR(inode->mode)) return -EISDIR;
+	if (offset > inode->size) return 0;
+
+	//len need to read
+	size_t len_to_read = len;
+	if ((offset + len) > inode->size){
+		len_to_read = inode->size - offset;
+	}
+
+	//read direct blocks
+	if (len_to_read > 0 && offset < DIR_SIZE) {
+		//len finished read
+		size_t temp = fs_read_dir(inode_idx, buf, len_to_read, (size_t) offset);
+		len_to_read -= temp;
+		offset += temp;
+		buf += temp;
+	}
+
+	//write indirect 1 blocks
+	if (len_to_read > 0 && offset < DIR_SIZE + INDIR1_SIZE) {
+		//need to allocate indir_1
+		if (!inode->indir_1) {
+
+		}
+		size_t temp = fs_write_indir1(inode->indir_1, buf, len_to_write, (size_t) offset - DIR_SIZE);
+		len_to_write -= temp;
+		offset += temp;
+		buf += temp;
+	}
 	return -1;
 }
 

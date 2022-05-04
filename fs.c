@@ -598,7 +598,6 @@ static int set_attributes_and_update(struct fs_dirent *de, char *name, mode_t mo
 	int freed = find_free_dir(de);
 	int freei = get_free_inode();
 	int freeb = isDir ? get_free_blk() : 0;
-	printf("d: %d, i: %d, b: %d\n", freed, freei, freeb);
 	if (freed < 0 || freei < 0 || freeb < 0) return -ENOSPC;
 	struct fs_dirent *dir = &de[freed];
 	struct fs_inode *inode = &inodes[freei];

@@ -693,14 +693,14 @@ static int fs_mkdir(const char *path, mode_t mode)
 	struct fs_inode *parent_inode = &inodes[parent_inode_idx]; // get the parent directory's inode from the inode table using its inode number
 	if (!S_ISDIR(parent_inode->mode)) return -ENOTDIR; // if the parent directory's mode is not a directory, error
 
-	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
+	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize an entry table using the inode's direct block pointer
 	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
-	// read into the directory entry table from the block device; exit if the block read fails
+	// read into the entry table from the block device; exit if the block read fails
 	if (disk->ops->read(disk, parent_inode->direct[0], 1, entries) < 0)
 		exit(1);
 	//assign inode and directory and update
 	int res = set_attributes_and_update(entries, name, mode, true);
-	if (res < 0) return res; // exit if assigning the directory's inode fails
+	if (res < 0) return res; // exit if assigning the inode fails
 
 	//write entries buffer into disk; exit if the block write fails
 	if (disk->ops->write(disk, parent_inode->direct[0], 1, entries) < 0)
@@ -874,23 +874,28 @@ static int fs_rmdir(const char *path)
 	if (!S_ISDIR(inode->mode)) return -ENOTDIR; // if the directory's mode is not a directory, error
 
 	//check if dir is empty
-	struct fs_dirent entries[DIRENTS_PER_BLK]; // initialize a directory entry table for the inode
-	memset(entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
-	// read into the directory entry table from the block device; exit if the block read fails
-	if (disk->ops->read(disk, inode->direct[0], 1, entries) < 0)
+	struct fs_dirent dir_entries[DIRENTS_PER_BLK]; // initialize an entry table using the directory inode's direct block pointer
+	memset(dir_entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
+	// read into the entry table from the block device; exit if the block read fails
+	if (disk->ops->read(disk, inode->direct[0], 1, dir_entries) < 0)
 		exit(1);
-	int res = is_empty_dir(entries); // if the directory is not empty, error
+	int res = is_empty_dir(dir_entries); // if the directory is not empty, error
 	if (res == 0) return -ENOTEMPTY;
 
 	//remove entry from parent dir
 	//CS492: your code below
-	for (int i = 0; i < DIRENTS_PER_BLK; i++) {
-		if (entries[i].valid && strcmp(entries[i].name, name) == 0) {
-			memset(&entries[i], 0, sizeof(struct fs_dirent));
+	struct fs_dirent parent_entries[DIRENTS_PER_BLK]; // initialize an entry table using the parent directory inode's direct block pointer
+	memset(parent_entries, 0, DIRENTS_PER_BLK * sizeof(struct fs_dirent)); // zero out the entry table
+	// read into the entry table from the block device; exit if the block read fails
+	if (disk->ops->read(disk, parent_inode->direct[0], 1, parent_entries) < 0)
+		exit(1);
+	for (int i = 0; i < DIRENTS_PER_BLK; i++) { // delete any instance of the directory in the parent directory's entry table
+		if (parent_entries[i].valid && strcmp(parent_entries[i].name, name) == 0) {
+			memset(&parent_entries[i], 0, sizeof(struct fs_dirent));
 		}
 	}
-	// update the parent's entry table in the block device; exit if the block write fails
-	if (disk->ops->write(disk, parent_inode->direct[0], 1, entries) < 0)
+	// update the parent directory's entry table in the block device; exit if the block write fails
+	if (disk->ops->write(disk, parent_inode->direct[0], 1, parent_entries) < 0)
 		exit(1);
 
 
